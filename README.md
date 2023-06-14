@@ -6,7 +6,7 @@
 
 ## Technology Stack
 
-Java 11, Maven, Spring 2, H2, Javax mail, Telegram Bots
+Java 11, Maven, Spring 2, Postgresql, Javax mail, Telegram Bots
 
 ## Инструкция по заполнению конфигурационного файла
 

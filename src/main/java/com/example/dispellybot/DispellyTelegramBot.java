@@ -24,6 +24,7 @@ import javax.mail.Session;
 import javax.mail.Store;
 import javax.mail.internet.MimeMessage;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
@@ -118,37 +119,13 @@ public class DispellyTelegramBot extends TelegramLongPollingBot {
     } else {
       // handle default case, if necessary
     }
-
-//    switch (receivedMessage) {
-//      case "/start":
-//        updateDB(chatId, userName);
-//        startBot(chatId, userName);
-//        break;
-//      case "/help@DispellyBot":
-//        sendHelpText(chatId, userName, HELP_TEXT);
-//        break;
-//      case "/connect@DispellyBot":
-//        storeAndFolder = connectToMessageStore(chatId, userName);
-//        break;
-//      case "/fetchmail@DispellyBot":
-//        fetchAndSendEmails(chatId, userName, storeAndFolder);
-//        break;
-//      case "/autofetch@DispellyBot":
-//        mailTimerTask(chatId, userName, storeAndFolder);
-//        break;
-//      case "/cancel@DispellyBot":
-//        stopTimerTask(userName, chatId, storeAndFolder);
-//        break;
-//      default:
-//        break;
-//    }
   }
 
   private void startBot(long chatId, String userName) {
     SendMessage message = new SendMessage();
     message.setChatId(chatId);
     message.setText("Hello, " + userName + "! I'm a " + config.getBotName() +
-        ". I will send emails specially for you.");
+        ". I will send emails specially for you using this unique key: " + chatId);
     try {
       execute(message);
       log.info("Reply sent to " + userName);
@@ -226,7 +203,6 @@ public class DispellyTelegramBot extends TelegramLongPollingBot {
       Folder inbox = store.getFolder("INBOX");
       inbox.open(Folder.READ_WRITE);
       log.info(userName + " successfully connected to email server");
-      sendTelegramMessage("You successfully connected to email server", userName, chatId);
 
       return new StoreAndFolder(store, inbox);
 
@@ -260,67 +236,67 @@ public class DispellyTelegramBot extends TelegramLongPollingBot {
           boolean messageSent = false; // флаг, отвечающий за отправку сообщения
           for (Message message : messages) {
             MimeMessage mimeMessage = (MimeMessage) message;
-            String sender = Arrays.toString(mimeMessage.getFrom());
-            String subject = mimeMessage.getSubject();
-            String toList = mailMessageBuilder.parseAddresses(
-                message.getRecipients(MimeMessage.RecipientType.TO));
-            String ccList = mailMessageBuilder.parseAddresses(
-                message.getRecipients(MimeMessage.RecipientType.CC));
-            String sentDate = message.getSentDate().toString();
+            String sender =
+                mailMessageBuilder.parseSender((Arrays.toString(mimeMessage.getFrom())));
 
-            // Считываем текст письма
-            String messageContent = MailMessageBuilder.getString(message);
-            // Составляем отправляемый текст
-            String text =
-                mailMessageBuilder.buildMessage(messageContent, subject, toList, ccList, sentDate);
-            // Ищем упоминание адресата в тексте письма
-            String result = mailMessageBuilder.parseMessageContent(messageContent);
+            //Фильтруем по отправителю
+            if (StringUtils.equals(sender, config.getSender())) {
 
-            // Маршрутизация
-            String[] words = result.trim().split("\\s+");
-            String firstWord;
+              String subject = mimeMessage.getSubject();
+              String toList = mailMessageBuilder.parseAddresses(
+                  message.getRecipients(MimeMessage.RecipientType.TO));
+              String ccList = mailMessageBuilder.parseAddresses(
+                  message.getRecipients(MimeMessage.RecipientType.CC));
+              String sentDate = message.getSentDate().toString();
 
-            if (words.length == 1) {
-              firstWord = result.trim();
-            } else {
-              firstWord = words[0];
-            }
-            Optional<User> optionalUser = userRepository.findByName(firstWord);
-            if (optionalUser.isPresent()) {
-              if (chatId == optionalUser.get().getId()) {
-                // Отправка сообщения в Telegram
-                sendTelegramMessage(text, userName, chatId);
-                messageSent = true; // сообщение было отправлено
-                // Пометка сообщения как прочитанного
-                message.setFlag(Flags.Flag.SEEN, true);
-              } else if (optionalUser.get().getName().equals(result)) {
-                // Пометка сообщения как непрочитанного
+              // Считываем текст письма
+              String messageContent = MailMessageBuilder.getString(message);
+              // Парсим сообщение
+              messageContent = mailMessageBuilder.parseMessageContent(messageContent);
+              // Составляем отправляемый текст
+              String text = mailMessageBuilder.buildMessage(messageContent, subject, toList, ccList, sentDate);
+              // Ищем упоминание адресата в тексте письма
+              String result = mailMessageBuilder.findBotField(messageContent);
+
+              // Маршрутизация
+              long groupId = 0;
+              if (result != null) {
+                groupId = Long.valueOf(result);
+              }
+              if (groupId != 0) {
+                Optional<User> optionalUser = userRepository.findById(groupId);
+                if (optionalUser.isPresent()) {
+                  if (chatId == groupId) {
+                    // Отправка сообщения в Telegram
+                    sendTelegramMessage(text, userName, chatId);
+                    messageSent = true; // сообщение было отправлено
+                    // Пометка сообщения как прочитанного
+                    message.setFlag(Flags.Flag.SEEN, true);
+                  }
+                } else {
+                  // Пометка сообщения как непрочитанного
+                  message.setFlag(Flags.Flag.SEEN, false);
+                }
+              }
+              if (!messageSent) {
+                // Если не было отправленных сообщений
+                log.info("No messages found in inbox for " + userName);
                 message.setFlag(Flags.Flag.SEEN, false);
               }
             } else {
-              // Пометка сообщения как непрочитанного
-              message.setFlag(Flags.Flag.SEEN, false);
+              log.info("The message is not from the sender we demanded.");
             }
-          }
-          if (!messageSent) {
-            // Если не было отправленных сообщений
-            log.info("No messages found in inbox for " + userName);
-            sendTelegramMessage(userName + ", sorry, but no messages found in inbox for you.",
-                userName, chatId);
           }
         }
         storeAndFolder.getFolder().close(false);
         storeAndFolder.getStore().close();
         log.info("Folder closed. Next time reconnect to the message store");
-        sendTelegramMessage("Folder closed. Next time reconnect to the message store", userName,
-            chatId);
       } catch (MessagingException ex) {
         log.error("Could not connect to the message store");
         ex.printStackTrace();
       }
     } else {
       log.info("Fetchmail selected without connection to the message store for " + userName);
-      sendTelegramMessage("Please connect to the message store first", userName, chatId);
     }
   }
 
@@ -342,7 +318,6 @@ public class DispellyTelegramBot extends TelegramLongPollingBot {
       log.info("Autofetch started for " + userName);
     } else {
       log.error("Autofetch without connection to the message store for " + userName);
-      sendTelegramMessage("Please connect to the message store first", userName, chatId);
     }
   }
 
@@ -360,7 +335,6 @@ public class DispellyTelegramBot extends TelegramLongPollingBot {
       throw new RuntimeException();
     }
     log.info("Autofetch cancelled for " + userName);
-    sendTelegramMessage("Autofetch cancelled", userName, chatId);
   }
 
   private void autoFetchAndSendEmails(long chatId, String userName, StoreAndFolder storeAndFolder) {
@@ -370,51 +344,62 @@ public class DispellyTelegramBot extends TelegramLongPollingBot {
     try {
       messages = storeAndFolder.getFolder()
           .search(new javax.mail.search.FlagTerm(new Flags(Flags.Flag.SEEN), false));
+
       if (messages.length == 0) {
         log.info("No new messages found in inbox.");
-        //sendTelegramMessage("No new messages found in inbox.", chatId);
       } else {
+        boolean messageSent = false; // флаг, отвечающий за отправку сообщения
         for (Message message : messages) {
           MimeMessage mimeMessage = (MimeMessage) message;
-          String sender = Arrays.toString(mimeMessage.getFrom());
-          String subject = mimeMessage.getSubject();
-          String toList = mailMessageBuilder.parseAddresses(
-              message.getRecipients(MimeMessage.RecipientType.TO));
-          String ccList = mailMessageBuilder.parseAddresses(
-              message.getRecipients(MimeMessage.RecipientType.CC));
-          String sentDate = message.getSentDate().toString();
+          String sender =
+              mailMessageBuilder.parseSender((Arrays.toString(mimeMessage.getFrom())));
 
-          // Считываем текст письма
-          String messageContent = MailMessageBuilder.getString(message);
-          // Составляем отправляемый текст
-          String text =
-              mailMessageBuilder.buildMessage(messageContent, subject, toList, ccList, sentDate);
-          // Ищем упоминание адресата в тексте письма
-          String result = mailMessageBuilder.parseMessageContent(messageContent);
+          //Фильтруем по отправителю
+          if (StringUtils.equals(sender, config.getSender())) {
 
-          // Маршрутизация
-          String[] words = result.trim().split("\\s+");
-          String firstWord;
+            String subject = mimeMessage.getSubject();
+            String toList = mailMessageBuilder.parseAddresses(
+                message.getRecipients(MimeMessage.RecipientType.TO));
+            String ccList = mailMessageBuilder.parseAddresses(
+                message.getRecipients(MimeMessage.RecipientType.CC));
+            String sentDate = message.getSentDate().toString();
 
-          if (words.length == 1) {
-            firstWord = result.trim();
-          } else {
-            firstWord = words[0];
-          }
-          Optional<User> optionalUser = userRepository.findByName(firstWord);
-          if (optionalUser.isPresent()) {
-            if (chatId == optionalUser.get().getId()) {
-              // Отправка сообщения в Telegram
-              sendTelegramMessage(text, userName, chatId);
-              // Пометка сообщения как прочитанного
-              message.setFlag(Flags.Flag.SEEN, true);
-            } else if (optionalUser.get().getName().equals(result)) {
-              // Пометка сообщения как непрочитанного
+            // Считываем текст письма
+            String messageContent = MailMessageBuilder.getString(message);
+            // Парсим сообщение
+            messageContent = mailMessageBuilder.parseMessageContent(messageContent);
+            // Составляем отправляемый текст
+            String text = mailMessageBuilder.buildMessage(messageContent, subject, toList, ccList, sentDate);
+            // Ищем упоминание адресата в тексте письма
+            String result = mailMessageBuilder.findBotField(messageContent);
+
+            // Маршрутизация
+            long groupId = 0;
+            if (result != null) {
+              groupId = Long.valueOf(result);
+            }
+            if (groupId != 0) {
+              Optional<User> optionalUser = userRepository.findById(groupId);
+              if (optionalUser.isPresent()) {
+                if (chatId == groupId) {
+                  // Отправка сообщения в Telegram
+                  sendTelegramMessage(text, userName, chatId);
+                  messageSent = true; // сообщение было отправлено
+                  // Пометка сообщения как прочитанного
+                  message.setFlag(Flags.Flag.SEEN, true);
+                }
+              } else {
+                // Пометка сообщения как непрочитанного
+                message.setFlag(Flags.Flag.SEEN, false);
+              }
+            }
+            if (!messageSent) {
+              // Если не было отправленных сообщений
+              log.info("No messages found in inbox for " + userName);
               message.setFlag(Flags.Flag.SEEN, false);
             }
           } else {
-            // Пометка сообщения как непрочитанного
-            message.setFlag(Flags.Flag.SEEN, false);
+            //Не правильный отправитель
           }
         }
       }

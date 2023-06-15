@@ -21,4 +21,5 @@ public class BotConfig {
   @Value("${bot.field}") String field;
   @Value("${bot.timer}") String time;
   @Value("${bot.delay}") String delay;
+  @Value("${bot.sender}") String sender;
 }

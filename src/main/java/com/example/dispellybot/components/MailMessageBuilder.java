@@ -1,6 +1,8 @@
 package com.example.dispellybot.components;
 
 import com.example.dispellybot.config.BotConfig;
+import java.io.IOException;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.mail.Address;
@@ -9,6 +11,11 @@ import javax.mail.Message;
 import javax.mail.MessagingException;
 import javax.mail.internet.MimeMultipart;
 import lombok.extern.slf4j.Slf4j;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.nodes.Node;
+import org.jsoup.nodes.TextNode;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -26,8 +33,7 @@ public class MailMessageBuilder {
   /**
    * Returns a messageContent from the email
    */
-  public static String getString(Message message)
-      throws MessagingException {
+  public static String getString(Message message) throws MessagingException {
     String messageContent = "";
     // проверяем тип содержимого сообщения
     if (message.getContentType().toLowerCase().startsWith("multipart/")) {
@@ -36,18 +42,7 @@ public class MailMessageBuilder {
         MimeMultipart multipart = (MimeMultipart) message.getContent();
         for (int i = 0; i < multipart.getCount(); i++) {
           BodyPart part = multipart.getBodyPart(i);
-          if (part.getContentType().toLowerCase().startsWith("text/plain")) {
-            messageContent = (String) part.getContent();
-            contentFormat = ContentFormat.TEXT_PLAIN;
-          } else if (part.getContentType().toLowerCase().startsWith("text/html")) {
-            messageContent = (String) part.getContent();
-            contentFormat = ContentFormat.TEXT_HTML;
-          } else if (part.getContentType().toLowerCase().startsWith("text/xml")) {
-            messageContent = (String) part.getContent();
-            contentFormat = ContentFormat.TEXT_XML;
-          } else {
-            // обрабатываем другие типы содержимого
-          }
+          messageContent = bodyPartParser(part);
         }
       } catch (Exception ex) {
         log.error("[Error downloading content]");
@@ -57,6 +52,32 @@ public class MailMessageBuilder {
     }
     return messageContent;
   }
+
+  private static String bodyPartParser(BodyPart part) throws MessagingException, IOException {
+    String messageContent = "";
+    if (part.getDataHandler().getContent() instanceof MimeMultipart) {
+      MimeMultipart multipart1 = (MimeMultipart) part.getDataHandler().getContent();
+      for (int j = 0; j < multipart1.getCount(); j++) {
+        BodyPart part1 = multipart1.getBodyPart(j);
+        messageContent += bodyPartParser(part1);
+      }
+    } else {
+      if (part.getContentType().toLowerCase().startsWith("text/plain")) {
+        messageContent = (String) part.getContent();
+        contentFormat = ContentFormat.TEXT_PLAIN;
+      } else if (part.getContentType().toLowerCase().startsWith("text/html")) {
+        messageContent = (String) part.getContent();
+        contentFormat = ContentFormat.TEXT_HTML;
+      } else if (part.getContentType().toLowerCase().startsWith("text/xml")) {
+        messageContent = (String) part.getContent();
+        contentFormat = ContentFormat.TEXT_XML;
+      } else {
+        // обрабатываем другие типы содержимого
+      }
+    }
+    return messageContent;
+  }
+
 
   /**
    * Returns a list of addresses in String format separated by comma
@@ -77,6 +98,18 @@ public class MailMessageBuilder {
   }
 
   /**
+   * Returns parsed sender
+   */
+  public String parseSender(String sender){
+    Pattern pattern = Pattern.compile("\\b[\\w.%-]+@[\\w.-]+\\.[a-zA-Z]{2,4}\\b");
+    Matcher matcher = pattern.matcher(sender);
+    if (matcher.find()) {
+      sender = matcher.group();
+    }
+    return sender;
+  }
+
+  /**
    * Builds a message to send
    */
   public String buildMessage(String messageContent, String subject, String toList, String ccList,
@@ -84,7 +117,7 @@ public class MailMessageBuilder {
     parseMessageContent(messageContent);
 
     if (contentFormat == ContentFormat.TEXT_HTML) {
-      messageContent = messageContent.replaceAll("<.*?>", "\n");
+      messageContent = parseMessageContent(messageContent);
     }
 
     return "Subject: " + subject + "\n" + "From: " + toList + "\n" + ccList + "\n" +
@@ -92,45 +125,35 @@ public class MailMessageBuilder {
   }
 
   /**
-   * Parses the message content
+   * Parses the message <html> </html> content
    */
   public String parseMessageContent(String messageContent) {
-    String result = null;
-    String regexp = null;
     if (contentFormat == ContentFormat.TEXT_HTML) {
-      regexp = config.getField() + ": (.+?)</div>";
-    }
-    if (contentFormat == ContentFormat.TEXT_PLAIN) {
-      regexp = config.getField() + ": (.+)";
-    }
-    if (contentFormat == ContentFormat.TEXT_XML) {
-      regexp = config.getField() + ">(.+?)<";
+      Document document = Jsoup.parse(messageContent);
+      Optional<Element> optionalLastP =
+          Optional.ofNullable(document.select("p:last-child").first());
+      if (optionalLastP.isPresent()) {
+        Node nextSibling = optionalLastP.get().nextSibling();
+        if (nextSibling instanceof TextNode) {
+          nextSibling.remove();
+        }
+      }
+      messageContent = document.text();
     }
 
-    Pattern pattern = Pattern.compile(regexp);
+    return messageContent;
+
+  }
+
+  /**
+   * Finds bot field value in the parsed message content
+   */
+  public String findBotField(String messageContent) {
+    String result = null;
+    Pattern pattern = Pattern.compile(config.getField() + ": .-?\\d+");
     Matcher matcher = pattern.matcher(messageContent);
     if (matcher.find()) {
-      result = matcher.group(1);
-    }
-
-    if ((result == null) && (contentFormat == ContentFormat.TEXT_HTML)) {
-      regexp = config.getField() + ": (.+?)\\s(.+?)<\\/div>";
-
-      pattern = Pattern.compile(regexp);
-      matcher = pattern.matcher(messageContent);
-      if (matcher.find()) {
-        result = matcher.group(1);
-      }
-    }
-
-    if ((result == null) && (contentFormat == ContentFormat.TEXT_PLAIN)) {
-      regexp = config.getField() + ": (.+?)\\s(.+?)";
-
-      pattern = Pattern.compile(regexp);
-      matcher = pattern.matcher(messageContent);
-      if (matcher.find()) {
-        result = matcher.group(1);
-      }
+      result = matcher.group().replace(config.getField() + ": ", "");
     }
     return result;
   }

@@ -6,7 +6,6 @@ import com.example.dispellybot.DispellyTelegramBot;
 import com.example.dispellybot.config.BotConfig;
 import com.example.dispellybot.database.User;
 import com.example.dispellybot.database.UserRepository;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -21,8 +20,8 @@ import javax.mail.NoSuchProviderException;
 import javax.mail.Session;
 import javax.mail.Store;
 import javax.mail.internet.MimeMessage;
+import javax.mail.search.FromStringTerm;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -114,8 +113,9 @@ public class MailService {
     // fetches new messages from server
     Message[] messages;
     try {
-      messages = inbox
-          .search(new javax.mail.search.FlagTerm(new Flags(Flags.Flag.SEEN), false));
+      //Фильтруем по отправителю
+      messages =
+          inbox != null ? inbox.search(new FromStringTerm(config.getSender())) : new Message[0];
 
       if (messages.length == 0) {
         //log.info("No new messages found in inbox.");
@@ -123,17 +123,9 @@ public class MailService {
         boolean messageSent = false; // флаг, отвечающий за отправку сообщения
         for (Message message : messages) {
           MimeMessage mimeMessage = (MimeMessage) message;
-          String sender =
-              mailMessageBuilder.parseSender((Arrays.toString(mimeMessage.getFrom())));
-
-          //Фильтруем по отправителю
-          if (StringUtils.equals(sender, config.getSender())) {
-
             String subject = mimeMessage.getSubject();
-            String toList = mailMessageBuilder.parseAddresses(
-                message.getRecipients(MimeMessage.RecipientType.TO));
-            String ccList = mailMessageBuilder.parseAddresses(
-                message.getRecipients(MimeMessage.RecipientType.CC));
+            String toList = mailMessageBuilder.parseAddresses(message.getRecipients(MimeMessage.RecipientType.TO));
+            String ccList = mailMessageBuilder.parseAddresses(message.getRecipients(MimeMessage.RecipientType.CC));
             String sentDate = message.getSentDate().toString();
 
             // Считываем текст письма
@@ -157,8 +149,8 @@ public class MailService {
                   // Отправка сообщения в Telegram
                   dispellyTelegramBot.sendTelegramMessage(text, user);
                   messageSent = true; // сообщение было отправлено
-                  // Пометка сообщения как прочитанного
-                  message.setFlag(Flags.Flag.SEEN, true);
+                  // Пометка сообщения на удаление
+                  message.setFlag(Flags.Flag.DELETED, true);
                 } else {
                   // Пометка сообщения как непрочитанного
                   message.setFlag(Flags.Flag.SEEN, false);
@@ -170,13 +162,9 @@ public class MailService {
             }
             if (!messageSent) {
               // Если не было отправленных сообщений
-              log.info("No messages found in inbox for " + user.getName());
+              //log.info("No messages found in inbox for " + user.getName());
               message.setFlag(Flags.Flag.SEEN, false);
-              // sendTelegramMessage(userName + ", sorry, but no messages found in inbox for you.", userName, chatId);
             }
-          } else {
-            //Не правильный отправитель
-          }
         }
       }
       inbox.close(false);

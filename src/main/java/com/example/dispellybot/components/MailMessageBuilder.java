@@ -100,7 +100,7 @@ public class MailMessageBuilder {
   /**
    * Returns parsed sender
    */
-  public String parseSender(String sender){
+  public String parseSender(String sender) {
     Pattern pattern = Pattern.compile("\\b[\\w.%-]+@[\\w.-]+\\.[a-zA-Z]{2,4}\\b");
     Matcher matcher = pattern.matcher(sender);
     if (matcher.find()) {

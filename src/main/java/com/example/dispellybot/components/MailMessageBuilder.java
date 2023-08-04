@@ -119,10 +119,9 @@ public class MailMessageBuilder {
     if (contentFormat == ContentFormat.TEXT_HTML) {
       messageContent = parseMessageContent(messageContent);
     }
-    String finalOutput = messageContent.replaceAll(findBotField(messageContent), "")
-        .replaceAll("Текст:", "");
 
-    return "Subject: " + subject + "\n\n" + finalOutput + "\n\n" + sentDate;
+    return "Subject: " + subject + "\n" + "From: " + toList + "\n" + ccList + "\n" +
+        messageContent + "\n\n" + sentDate;
   }
 
   /**

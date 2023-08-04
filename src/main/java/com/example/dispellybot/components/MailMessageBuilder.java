@@ -45,9 +45,8 @@ public class MailMessageBuilder {
           messageContent = bodyPartParser(part);
         }
       } catch (Exception ex) {
-        log.error("[Error downloading content]");
+        log.error("[Error downloading content]", ex);
         messageContent = "[Error downloading content]";
-        ex.printStackTrace();
       }
     }
     return messageContent;
@@ -98,18 +97,6 @@ public class MailMessageBuilder {
   }
 
   /**
-   * Returns parsed sender
-   */
-  public String parseSender(String sender) {
-    Pattern pattern = Pattern.compile("\\b[\\w.%-]+@[\\w.-]+\\.[a-zA-Z]{2,4}\\b");
-    Matcher matcher = pattern.matcher(sender);
-    if (matcher.find()) {
-      sender = matcher.group();
-    }
-    return sender;
-  }
-
-  /**
    * Builds a message to send
    */
   public String buildMessage(String messageContent, String subject, String sentDate) {
@@ -119,7 +106,7 @@ public class MailMessageBuilder {
       messageContent = parseMessageContent(messageContent);
     }
 
-    return "Subject: " + subject + "\n\n" + messageContent + "\n\n" + sentDate;
+    return subject + "\n\n" + messageContent + "\n\n" + sentDate;
   }
 
   /**

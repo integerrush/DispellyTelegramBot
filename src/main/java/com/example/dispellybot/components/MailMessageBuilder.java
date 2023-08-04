@@ -112,16 +112,14 @@ public class MailMessageBuilder {
   /**
    * Builds a message to send
    */
-  public String buildMessage(String messageContent, String subject, String toList, String ccList,
-                             String sentDate) {
+  public String buildMessage(String messageContent, String subject, String sentDate) {
     parseMessageContent(messageContent);
 
     if (contentFormat == ContentFormat.TEXT_HTML) {
       messageContent = parseMessageContent(messageContent);
     }
 
-    return "Subject: " + subject + "\n" + "From: " + toList + "\n" + ccList + "\n" +
-        messageContent + "\n\n" + sentDate;
+    return "Subject: " + subject + "\n\n" + messageContent + "\n\n" + sentDate;
   }
 
   /**
@@ -156,5 +154,13 @@ public class MailMessageBuilder {
       result = matcher.group().replace(config.getField() + ": ", "");
     }
     return result;
+  }
+
+  /**
+   * Modifies message content before sending
+   */
+  public String modifyMessageContent(String messageContent) {
+    return messageContent.replace(config.getField() + ": ",  "").replace(findBotField(messageContent), "")
+        .replace("Текст:", "\n");
   }
 }

@@ -133,7 +133,7 @@ public class MailService {
             // Парсим сообщение
             messageContent = mailMessageBuilder.parseMessageContent(messageContent);
             // Составляем отправляемый текст
-            text = mailMessageBuilder.buildMessage(messageContent, subject, toList, ccList, sentDate);
+            text = mailMessageBuilder.buildMessage(messageContent, subject, sentDate);
             // Ищем упоминание адресата в тексте письма
             String result = mailMessageBuilder.findBotField(messageContent);
 
@@ -146,8 +146,8 @@ public class MailService {
               Optional<User> optionalUser = userRepository.findById(groupId);
               if (optionalUser.isPresent()) {
                 if (user.getId() == groupId) {
-                  // Отправка сообщения в Telegram
-                  dispellyTelegramBot.sendTelegramMessage(text, user);
+                  // Отправка измененного сообщения в Telegram
+                  dispellyTelegramBot.sendTelegramMessage(mailMessageBuilder.modifyMessageContent(text), user);
                   messageSent = true; // сообщение было отправлено
                   // Пометка сообщения на удаление
                   message.setFlag(Flags.Flag.DELETED, true);

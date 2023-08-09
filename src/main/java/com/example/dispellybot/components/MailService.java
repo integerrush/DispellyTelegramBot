@@ -18,13 +18,15 @@ import static java.util.Objects.isNull;
 @Component
 public class MailService {
 
+    private static Timer timer;
     final BotConfig config;
     private final UserRepository userRepository;
     private final MailMessageBuilder mailMessageBuilder;
     private final DispellyTelegramBot dispellyTelegramBot;
 
     public MailService(BotConfig config, UserRepository userRepository,
-                       MailMessageBuilder mailMessageBuilder, DispellyTelegramBot dispellyTelegramBot) {
+                       MailMessageBuilder mailMessageBuilder,
+                       DispellyTelegramBot dispellyTelegramBot) {
         this.config = config;
         this.userRepository = userRepository;
         this.mailMessageBuilder = mailMessageBuilder;
@@ -37,6 +39,13 @@ public class MailService {
         mailTimerTask(store);
     }
 
+    public static Timer getTimer() {
+        if (timer == null) {
+            timer = new Timer();
+        }
+        return timer;
+    }
+
     /**
      * Starts automatic check for new messages in inbox.
      */
@@ -44,18 +53,20 @@ public class MailService {
         long delay = Long.parseLong(config.getDelay());
         long period = Long.parseLong(config.getTime());
 
-        Timer timer = new Timer();
-        timer.scheduleAtFixedRate(new TimerTask() {
+        getTimer().scheduleAtFixedRate(new TimerTask() {
             public void run() {
-                Store storeCopy = store;
-                if (isNull(storeCopy)) {
-                    storeCopy = connectToMessageStore();
-                    log.info("Reconnected to the message store.");
-                }
                 List<User> users = userRepository.findAll();
                 for (User user : users) {
-                    // Проверка наличия новых сообщений в почте и их обработка
-                    autoFetchAndSendEmails(user, storeCopy);
+                    try {
+                        if (store.isConnected()) {
+                            // Проверка наличия новых сообщений в почте и их обработка
+                            autoFetchAndSendEmails(user, store);
+                        } else {
+                            reconnectAndFetch(user);
+                        }
+                    } catch (Exception ex) {
+                        reconnectAndFetch(user);
+                    }
                 }
             }
         }, delay, period);
@@ -86,6 +97,15 @@ public class MailService {
         return null;
     }
 
+    /**
+     * Reconnects to the message store and calls autoFetchAndSendEmails method.
+     */
+    private void reconnectAndFetch(User user) {
+        Store storeCopy = connectToMessageStore();
+        log.info("Reconnected to the message store.");
+        autoFetchAndSendEmails(user, storeCopy);
+    }
+
     public void autoFetchAndSendEmails(User user, Store store) {
         // opens the inbox folder
         Folder inbox = null;
@@ -113,10 +133,11 @@ public class MailService {
                     MimeMessage mimeMessage = (MimeMessage) message;
                     String fromAddresses = mailMessageBuilder.parseAddresses(mimeMessage.getFrom());
                     Boolean containsAddress = Optional.ofNullable(fromAddresses)
-                            .map(s -> s.contains(config.getSender()))
-                            .orElse(Boolean.FALSE);
+                        .map(s -> s.contains(config.getSender()))
+                        .orElse(Boolean.FALSE);
                     if (Boolean.FALSE.equals(containsAddress)) {
-                        log.debug("From: {}; Doesn't contains required address: {}", fromAddresses, config.getSender());
+                        log.debug("From: {}; Doesn't contains required address: {}", fromAddresses,
+                            config.getSender());
                         continue;
                     }
                     String subject = mimeMessage.getSubject();
@@ -141,7 +162,8 @@ public class MailService {
                         if (optionalUser.isPresent()) {
                             if (user.getId() == groupId) {
                                 // Отправка измененного сообщения в Telegram
-                                dispellyTelegramBot.sendTelegramMessage(mailMessageBuilder.modifyMessageContent(text), user);
+                                dispellyTelegramBot.sendTelegramMessage(
+                                    mailMessageBuilder.modifyMessageContent(text), user);
                                 messageSent = true; // сообщение было отправлено
                                 sendMessageCounter++;
                                 // Пометка сообщения на удаление

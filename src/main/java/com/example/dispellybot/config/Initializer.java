@@ -1,8 +1,8 @@
 package com.example.dispellybot.config;
 
 import com.example.dispellybot.DispellyTelegramBot;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -12,9 +12,10 @@ import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class Initializer {
-  @Autowired
-  DispellyTelegramBot bot;
+
+  private final DispellyTelegramBot bot;
 
   @EventListener({ContextRefreshedEvent.class})
   public void init() {

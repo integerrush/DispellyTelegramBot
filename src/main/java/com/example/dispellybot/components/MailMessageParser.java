@@ -71,16 +71,16 @@ public class MailMessageParser {
             }
         } else {
             if (part.getContentType().toLowerCase().startsWith("text/html")) {
-                messageBuilder.append(removeCC(part.getContent().toString()));
-            } else if (part.getContentType().toLowerCase().startsWith("text/plain")
-                    || part.getContentType().toLowerCase().startsWith("text/xml")) {
-
+                messageBuilder.append(removeCNHTML(part.getContent().toString()));
+            } else if (part.getContentType().toLowerCase().startsWith("text/plain")) {
+                messageBuilder.append(removeCNPlainText(part.getContent().toString()));
+            } else if (part.getContentType().toLowerCase().startsWith("text/xml")) {
                 messageBuilder.append(part.getContent());
             }
         }
     }
 
-    private String removeCC(String messageContent) {
+    private String removeCNHTML(String messageContent) {
         Document document = Jsoup.parse(messageContent);
         Optional<Element> optionalLastP =
                 Optional.ofNullable(document.select("p:last-child").first());
@@ -93,6 +93,10 @@ public class MailMessageParser {
         messageContent = document.text();
 
         return messageContent;
+    }
+
+    private String removeCNPlainText(String messageContent) {
+        return messageContent.replaceAll("УВЕДОМЛЕНИЕ О КОНФИДЕНЦИАЛЬНОСТИ: .*", "");
     }
 
     private String findBotField(String messageContent) {

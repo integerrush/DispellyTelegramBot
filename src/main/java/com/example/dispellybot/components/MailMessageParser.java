@@ -72,9 +72,8 @@ public class MailMessageParser {
         } else {
             if (part.getContentType().toLowerCase().startsWith("text/html")) {
                 messageBuilder.append(removeCNHTML(part.getContent().toString()));
-            } else if (part.getContentType().toLowerCase().startsWith("text/plain")) {
-                messageBuilder.append(removeCNPlainText(part.getContent().toString()));
-            } else if (part.getContentType().toLowerCase().startsWith("text/xml")) {
+            } else if (part.getContentType().toLowerCase().startsWith("text/plain")
+                    || part.getContentType().toLowerCase().startsWith("text/xml")) {
                 messageBuilder.append(part.getContent());
             }
         }
@@ -95,10 +94,6 @@ public class MailMessageParser {
         return messageContent;
     }
 
-    private String removeCNPlainText(String messageContent) {
-        return messageContent.replaceAll("УВЕДОМЛЕНИЕ О КОНФИДЕНЦИАЛЬНОСТИ: .*", "");
-    }
-
     private String findBotField(String messageContent) {
         String result = null;
         Pattern pattern = Pattern.compile(groupField + ": .-?\\d+");
@@ -112,7 +107,8 @@ public class MailMessageParser {
     private String replaceFields(String messageContent) {
         String preparedMessage = messageContent;
         preparedMessage = preparedMessage.replace(groupField + ": ", "")
-                .replace("Текст: ", "\n");
+                .replace("Текст: ", "\n")
+                .replaceAll("УВЕДОМЛЕНИЕ О КОНФИДЕНЦИАЛЬНОСТИ: .*", "");
 
         String botField = findBotField(messageContent);
         if (StringUtils.isNotEmpty(botField)) {

@@ -128,6 +128,9 @@ public class DispellyTelegramBot extends TelegramLongPollingBot {
             message.setSentToTelegram(true);
         } catch (TelegramApiException e) {
             log.error("Can't send message", e);
+            if (e.getMessage().contains("chat not found")) {
+                message.setSentToTelegram(true);
+            }
         }
     }
 }

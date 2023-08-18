@@ -3,10 +3,7 @@ package com.example.dispellybot.database;
 import lombok.Getter;
 import lombok.Setter;
 
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.Id;
+import javax.persistence.*;
 
 @Getter
 @Setter
@@ -22,4 +19,7 @@ public class BotMessage {
     private String text;
     private String date;
     private boolean sentToTelegram = false;
+
+    @Transient // В groupId может быть записано что угодно, поэтому отдельное поле под группу
+    private BotGroup group;
 }

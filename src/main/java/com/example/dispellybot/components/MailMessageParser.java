@@ -1,6 +1,7 @@
 package com.example.dispellybot.components;
 
 import com.example.dispellybot.config.BotConfig;
+import com.example.dispellybot.database.BotGroupRepository;
 import com.example.dispellybot.database.BotMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -24,8 +25,11 @@ public class MailMessageParser {
 
     private final String groupField;
 
-    public MailMessageParser(BotConfig config) {
+    private final BotGroupService groupService;
+
+    public MailMessageParser(BotConfig config, BotGroupService botGroupService) {
         this.groupField = config.getField();
+        this.groupService = botGroupService;
     }
 
     public BotMessage parse(Message message) {
@@ -41,6 +45,8 @@ public class MailMessageParser {
 
             botMessage.setGroupId(groupId(messageBuilderString));
             botMessage.setText(replaceFields(messageBuilderString));
+
+            botMessage.setGroup(groupService.findById(botMessage.getGroupId()));
 
             message.setFlag(Flags.Flag.SEEN, true);
             message.setFlag(Flags.Flag.DELETED, true);

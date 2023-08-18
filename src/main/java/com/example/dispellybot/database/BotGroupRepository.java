@@ -7,8 +7,5 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface UserRepository extends JpaRepository<User, Long> {
-
-  @Query("SELECT u FROM telegram_user u WHERE u.name = :name")
-  Optional<User> findByName(@Param("name") String name);
+public interface BotGroupRepository extends JpaRepository<BotGroup, Long> {
 }

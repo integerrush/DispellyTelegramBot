@@ -8,10 +8,9 @@ import lombok.*;
 @Setter
 @Getter
 @Builder
-@Entity(name = "bot_group")
 @NoArgsConstructor
-@RequiredArgsConstructor
 @AllArgsConstructor
+@Entity(name = "bot_group")
 public class BotGroup {
 
   @Id
@@ -20,3 +19,4 @@ public class BotGroup {
   private long missedMessages;
   private boolean isRunning;
 }
+

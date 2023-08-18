@@ -98,7 +98,7 @@ public class DispellyTelegramBot extends TelegramLongPollingBot {
             text.append("\nС последнего запуска пропущено ").append(missedMessages).append(" сообщений!");
         }
 
-        sendMessage(group, text.toString());
+        sendMessage(group.getId(), text.toString());
     }
 
     private void stopBot(long chatId, String groupName) {
@@ -109,7 +109,7 @@ public class DispellyTelegramBot extends TelegramLongPollingBot {
 
         botGroupService.stopGroup(group);
 
-        sendMessage(group, text);
+        sendMessage(group.getId(), text);
     }
 
     private boolean sendMessage(BotGroup group, String text) {
@@ -122,16 +122,20 @@ public class DispellyTelegramBot extends TelegramLongPollingBot {
             return true;
         }
 
+        sendMessage(group.getId(), text);
+
+        return false;
+    }
+
+    private void sendMessage(long groupId, String text) {
         SendMessage sendMessage = new SendMessage();
-        sendMessage.setChatId(group.getId());
+        sendMessage.setChatId(groupId);
         sendMessage.setText(text);
         try {
             execute(sendMessage);
         } catch (Exception ex) {
             log.error("Can't send message", ex);
         }
-
-        return false;
     }
 
     public void sendTelegramMessage(BotMessage message) {

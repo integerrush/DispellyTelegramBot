@@ -1,10 +1,9 @@
-package com.example.dispellybot;
+package com.example.dispellybot.components;
 
 
 import com.example.dispellybot.config.BotConfig;
+import com.example.dispellybot.database.BotGroup;
 import com.example.dispellybot.database.BotMessage;
-import com.example.dispellybot.database.User;
-import com.example.dispellybot.database.UserRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
@@ -16,23 +15,23 @@ import org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScope
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.util.List;
-import java.util.Optional;
+import java.util.Objects;
 
 @Slf4j
 @Component
 public class DispellyTelegramBot extends TelegramLongPollingBot {
 
     private static final List<BotCommand> LIST_OF_COMMANDS = List.of(
-            new BotCommand("/start", "start bot")
+            new BotCommand("/start", "start bot"),
+            new BotCommand("/stop", "Stop bot")
     );
 
     private final BotConfig config;
+    private final BotGroupService botGroupService;
 
-    private final UserRepository userRepository;
-
-    public DispellyTelegramBot(BotConfig config, UserRepository userRepository) {
+    public DispellyTelegramBot(BotConfig config, BotGroupService botGroupService) {
         this.config = config;
-        this.userRepository = userRepository;
+        this.botGroupService = botGroupService;
         try {
             this.execute(new SetMyCommands(LIST_OF_COMMANDS, new BotCommandScopeDefault(), null));
         } catch (TelegramApiException e) {
@@ -78,57 +77,70 @@ public class DispellyTelegramBot extends TelegramLongPollingBot {
 
     private void botAnswerUtils(String receivedMessage, long chatId, String userName) {
         if (receivedMessage.equals("/start" + "@" + config.getBotName())) {
-            updateDB(chatId, userName);
             startBot(chatId, userName);
+        } else if (receivedMessage.equals("/stop" + "@" + config.getBotName())) {
+            stopBot(chatId, userName);
         }
     }
 
-    private void startBot(long chatId, String userName) {
-        SendMessage message = new SendMessage();
-        message.setChatId(chatId);
-        message.setText("Привет, " + userName + "!\nЧтобы получать сообщения, необходимо подставить в письмо строку\n"
-                + config.getField() + ": " + chatId);
+    private void startBot(long chatId, String groupName) {
+        BotGroup group = BotGroup.builder()
+                .id(chatId).name(groupName)
+                .build();
+        StringBuilder text = new StringBuilder(256);
+        text.append("Привет, ").append(groupName).append("!\n");
+        text.append("Чтобы получать сообщения, необходимо подставить в письмо строку\n");
+        text.append(config.getField()).append(": ").append(chatId);
+
+        long missedMessages = botGroupService.startGroup(group);
+
+        if (missedMessages > 0) {
+            text.append("\nС последнего запуска пропущено ").append(missedMessages).append(" сообщений!");
+        }
+
+        sendMessage(group.getId(), text.toString());
+    }
+
+    private void stopBot(long chatId, String groupName) {
+        BotGroup group = BotGroup.builder()
+                .id(chatId).name(groupName)
+                .build();
+        String text = "Чтобы снова получать сообщения, введите команду /start@" + config.getBotName();
+
+        botGroupService.stopGroup(group);
+
+        sendMessage(group.getId(), text);
+    }
+
+    private boolean sendMessage(BotGroup group, String text) {
+        if (Objects.isNull(group) || group.getId() == 0) {
+            return true;
+        }
+
+        if (!group.isRunning()) {
+            botGroupService.addMissedMessage(group);
+            return true;
+        }
+
+        sendMessage(group.getId(), text);
+
+        return false;
+    }
+
+    private void sendMessage(long groupId, String text) {
+        SendMessage sendMessage = new SendMessage();
+        sendMessage.setChatId(groupId);
+        sendMessage.setText(text);
         try {
-            execute(message);
-        } catch (TelegramApiException e) {
-            log.error(e.getMessage());
-        }
-    }
-
-    private void updateDB(long chatId, String userName) {
-        Optional<User> optionalUser = userRepository.findById(chatId);
-        if (optionalUser.isPresent()) {
-            User user = optionalUser.get();
-            if (!user.getName().equals(userName)) {
-                user.setName(userName);
-                userRepository.save(user);
-                log.info("The user's name is updated in DB: " + userName);
-            } else {
-                log.info("User " + userName + " is not new and has the same name");
-            }
-        } else {
-            User user = new User();
-            user.setId(chatId);
-            user.setName(userName);
-
-            userRepository.save(user);
-
-            log.info("The user is added to DB: " + userName);
+            execute(sendMessage);
+        } catch (Exception ex) {
+            log.error("Can't send message", ex);
         }
     }
 
     public void sendTelegramMessage(BotMessage message) {
-        SendMessage sendMessage = new SendMessage();
-        sendMessage.setChatId(message.getGroupId());
-        sendMessage.setText(message.getSubject() + "\n\n" + message.getText() + "\n\n" + message.getDate());
-        try {
-            if (message.getGroupId() != 0L) {
-                execute(sendMessage);
-            }
-            message.setSentToTelegram(true);
-        } catch (TelegramApiException e) {
-            log.error("Can't send message", e);
-        }
+        boolean sent = sendMessage(message.getGroup(), message.getText());
+        message.setSentToTelegram(sent);
     }
 }
 

@@ -1,6 +1,7 @@
 package com.example.dispellybot.components;
 
 import com.example.dispellybot.config.BotConfig;
+import com.example.dispellybot.database.BotGroupRepository;
 import com.example.dispellybot.database.BotMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -24,8 +25,11 @@ public class MailMessageParser {
 
     private final String groupField;
 
-    public MailMessageParser(BotConfig config) {
+    private final BotGroupService groupService;
+
+    public MailMessageParser(BotConfig config, BotGroupService botGroupService) {
         this.groupField = config.getField();
+        this.groupService = botGroupService;
     }
 
     public BotMessage parse(Message message) {
@@ -41,6 +45,8 @@ public class MailMessageParser {
 
             botMessage.setGroupId(groupId(messageBuilderString));
             botMessage.setText(replaceFields(messageBuilderString));
+
+            botMessage.setGroup(groupService.findById(botMessage.getGroupId()));
 
             message.setFlag(Flags.Flag.SEEN, true);
             message.setFlag(Flags.Flag.DELETED, true);
@@ -71,16 +77,15 @@ public class MailMessageParser {
             }
         } else {
             if (part.getContentType().toLowerCase().startsWith("text/html")) {
-                messageBuilder.append(removeCC(part.getContent().toString()));
+                messageBuilder.append(removeCNHTML(part.getContent().toString()));
             } else if (part.getContentType().toLowerCase().startsWith("text/plain")
                     || part.getContentType().toLowerCase().startsWith("text/xml")) {
-
                 messageBuilder.append(part.getContent());
             }
         }
     }
 
-    private String removeCC(String messageContent) {
+    private String removeCNHTML(String messageContent) {
         Document document = Jsoup.parse(messageContent);
         Optional<Element> optionalLastP =
                 Optional.ofNullable(document.select("p:last-child").first());
@@ -108,7 +113,8 @@ public class MailMessageParser {
     private String replaceFields(String messageContent) {
         String preparedMessage = messageContent;
         preparedMessage = preparedMessage.replace(groupField + ": ", "")
-                .replace("Текст: ", "\n");
+                .replace("Текст: ", "\n")
+                .replaceAll("УВЕДОМЛЕНИЕ О КОНФИДЕНЦИАЛЬНОСТИ: .*", "");
 
         String botField = findBotField(messageContent);
         if (StringUtils.isNotEmpty(botField)) {

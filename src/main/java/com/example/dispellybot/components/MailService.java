@@ -1,6 +1,5 @@
 package com.example.dispellybot.components;
 
-import com.example.dispellybot.DispellyTelegramBot;
 import com.example.dispellybot.config.BotConfig;
 import com.example.dispellybot.database.BotMessage;
 import lombok.extern.slf4j.Slf4j;

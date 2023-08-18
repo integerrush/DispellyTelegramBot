@@ -1,6 +1,6 @@
 package com.example.dispellybot.config;
 
-import com.example.dispellybot.DispellyTelegramBot;
+import com.example.dispellybot.components.DispellyTelegramBot;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.ContextRefreshedEvent;

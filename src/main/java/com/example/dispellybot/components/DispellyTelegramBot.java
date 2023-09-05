@@ -72,6 +72,13 @@ public class DispellyTelegramBot extends TelegramLongPollingBot {
             receivedMessage = update.getCallbackQuery().getData();
 
             botAnswerUtils(receivedMessage, chatId, userName);
+        } else if (update.hasChannelPost()) {
+            chatId = update.getChannelPost().getChatId();
+            userName = update.getChannelPost().getChat().getTitle();
+            if (update.getChannelPost().hasText()) {
+                receivedMessage = update.getChannelPost().getText();
+                botAnswerUtils(receivedMessage, chatId, userName);
+            }
         }
     }
 
@@ -98,7 +105,7 @@ public class DispellyTelegramBot extends TelegramLongPollingBot {
             text.append("\nС последнего запуска пропущено ").append(missedMessages).append(" сообщений!");
         }
 
-        sendMessage(group.getId(), text.toString());
+         sendMessage(group.getId(), text.toString());
     }
 
     private void stopBot(long chatId, String groupName) {

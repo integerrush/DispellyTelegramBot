@@ -75,6 +75,7 @@ public class DispellyTelegramBot extends TelegramLongPollingBot {
         } else if (update.hasChannelPost()) {
             chatId = update.getChannelPost().getChatId();
             userName = update.getChannelPost().getChat().getTitle();
+
             if (update.getChannelPost().hasText()) {
                 receivedMessage = update.getChannelPost().getText();
                 botAnswerUtils(receivedMessage, chatId, userName);

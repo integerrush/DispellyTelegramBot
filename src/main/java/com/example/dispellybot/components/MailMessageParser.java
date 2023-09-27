@@ -1,8 +1,17 @@
 package com.example.dispellybot.components;
 
 import com.example.dispellybot.config.BotConfig;
-import com.example.dispellybot.database.BotGroupRepository;
 import com.example.dispellybot.database.BotMessage;
+import java.io.IOException;
+import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import javax.mail.BodyPart;
+import javax.mail.Flags;
+import javax.mail.Message;
+import javax.mail.MessagingException;
+import javax.mail.Part;
+import javax.mail.internet.MimeMultipart;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Jsoup;
@@ -11,13 +20,6 @@ import org.jsoup.nodes.Element;
 import org.jsoup.nodes.Node;
 import org.jsoup.nodes.TextNode;
 import org.springframework.stereotype.Service;
-
-import javax.mail.*;
-import javax.mail.internet.MimeMultipart;
-import java.io.IOException;
-import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Slf4j
 @Service
@@ -114,6 +116,7 @@ public class MailMessageParser {
         String preparedMessage = messageContent;
         preparedMessage = preparedMessage.replace(groupField + ": ", "")
                 .replace("Текст: ", "\n")
+                .replaceAll("&#10;", "\n")
                 .replaceAll("УВЕДОМЛЕНИЕ О КОНФИДЕНЦИАЛЬНОСТИ: .*", "");
 
         String botField = findBotField(messageContent);
